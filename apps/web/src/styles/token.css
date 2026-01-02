@@ -1,0 +1,36 @@
+/* Design Tokens (RGB values to support alpha in Tailwind */
+:root{
+    /* base */
+    --bg: 245 245 245;          /* #F5F5F5 */
+    --fg: 44 60 91;             /* #2C3C5B */
+
+    /* surfaces */
+    --card: 255 255 255;
+    --muted: 235 237 240;
+
+    /* borders */
+    --border: 220 224 230;
+
+    /* brand / primary */
+    --primary: 44 60 91;        /* same as fg */
+    --primary-foreground: 255 255 255;
+
+    /* text */
+    --muted-foreground: 120 130 150;
+}
+
+.dark {
+    /* dark mode (optional, still coherent) */
+    --bg: 20 24 33;
+    --fg: 235 238 245;
+  
+    --card: 28 32 44;
+    --muted: 36 40 54;
+  
+    --border: 55 60 80;
+  
+    --primary: 180 195 255;
+    --primary-foreground: 20 24 33;
+  
+    --muted-foreground: 160 170 200;
+}

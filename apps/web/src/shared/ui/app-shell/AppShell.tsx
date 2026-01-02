@@ -51,7 +51,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 								"flex items-center rounded-xl px-3 py-2 text-sm transition",
 								active
 								? "bg-black text-white"
-								: "text-neutral-800 hover:bg-neutral-100",
+								: "text-neutral-800 hover:bg-neutral-100 bg-bg",
 								collapsed && mode === "desktop" ? "justify-center px-2" : "gap-3",
 							].join(" ")}
 							aria-current={active ? "page" : undefined}>
@@ -67,9 +67,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   	);
 
 	return (
-		<div className="min-h-dvh bg-white text-neutral-900">
+		<div className="min-h-dvh bg-bg text-neutral-900">
 		{/* Header */}
-		<header className="sticky top-0 z-40 h-14 border-b bg-white/80 backdrop-blur">
+		<header className="sticky top-0 z-40 h-14 border-b bg-bg/80 backdrop-blur">
 			<div className="mx-auto flex h-full max-w-screen-2xl items-center gap-3 px-4">
 				{/* mobile menu */}
 				<button
@@ -102,7 +102,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 				className="absolute inset-0 bg-black/40"
 				onClick={() => setMobileOpen(false)}
 			/>
-			<aside className="absolute left-0 top-0 h-full w-72 bg-white border-r">
+			<aside className="absolute left-0 top-0 h-full w-72 bg-bg border-r">
 				<div className="h-14 border-b px-4 flex items-center justify-between">
 				<span className="font-semibold">Whalley Score</span>
 				<button
@@ -123,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 			{/* desktop sidebar */}
 			<aside
 			className={[
-				"hidden md:block border-r bg-white",
+				"hidden md:block border-r bg-bg",
 				collapsed ? "w-16" : "w-64",
 			].join(" ")}
 			>
