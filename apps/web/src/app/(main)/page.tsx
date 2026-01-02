@@ -1,13 +1,10 @@
-import Image from "next/image";
-import { apiGet } from "@/shared/lib/api";
-
-export default async function Home() {
-  const health = await apiGet<{ ok: boolean }>("/health");
-
+export default function HomePage() {
   return (
-    <div>
-      <pre>{JSON.stringify(health, null, 2)}</pre>
-      <Image src="/next.svg" alt="Next.js logo" width={100} height={20} priority />
-    </div>
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <h1 className="text-3xl font-bold">Whalley Score</h1>
+      <p className="mt-3 text-neutral-600">
+        Welcome! Go to <strong>/map</strong> to explore recommended countries.
+      </p>
+    </main>
   );
 }
