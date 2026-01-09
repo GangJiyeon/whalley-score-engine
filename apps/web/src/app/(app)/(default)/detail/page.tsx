@@ -1,39 +1,39 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 /**
- * Test Page (UI-only, 대충 완성본)
- * - 줄글 입력 + (선택사항) 번호/체크로 빠른 선택
- * - 질문 5개 고정
- * - 페이지 스크롤 X / 패널 내부만 스크롤
- * - 점수 산출 디테일은 "결과 상세"에서 한다는 전제(여긴 프리뷰만)
+ * Result Page (UI-only)
+ * - ListPage 리듬: px-4 pt-20 pb-10 max-w-5xl
+ * - 페이지 스크롤 X (h-dvh overflow-hidden)
+ * - 좌: 결과 요약 + Breakdown + Next steps + CTA
+ * - 우: "왜 이렇게 나왔는지" 디테일(섹션별 텍스트) + (선택) 입력 요약
  */
 
-type AffectsKey = "job" | "cost" | "visa" | "language";
-
-type QuickOption = { id: string; label: string };
-
-type Question = {
-  id: string;
-  title: string;
-  placeholder: string;
-  why: string;
-  affects: AffectsKey[];
-  example?: string;
-  quickOptions?: QuickOption[]; // ✅ 1~5개 추천 선택지(선택사항)
+type ScoreBreakdown = {
+  job: number;
+  cost: number;
+  visa: number;
+  language: number;
 };
 
-type AnswerMap = Record<string, string>;
-
-type PreviewItem = {
+type Result = {
   regionId: string;
   regionName: string;
   countryName: string;
   countryCode: string;
-  score: number;
-  reasonLine: string;
+  total: number; // 0~100
+  breakdown: ScoreBreakdown;
+  summaryLine: string; // 한 줄 결론
+  reasons: {
+    job: string[];
+    cost: string[];
+    visa: string[];
+    language: string[];
+  };
+  nextSteps: { title: string; desc: string; impact?: string }[];
   tags?: string[];
+  createdAt: string; // yyyy-mm-dd
 };
 
 const glass =
@@ -43,7 +43,11 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function affectsLabel(k: AffectsKey) {
+function pct(n: number) {
+  return `${clamp(n, 0, 100)}%`;
+}
+
+function keyLabel(k: keyof ScoreBreakdown) {
   switch (k) {
     case "job":
       return "Job";
@@ -56,221 +60,91 @@ function affectsLabel(k: AffectsKey) {
   }
 }
 
-export default function TestPage() {
-  const questions: Question[] = useMemo(
+export default function ResultPage() {
+  // ✅ UI-only 더미 데이터 (나중에 API 결과로 교체)
+  const result: Result = useMemo(
+    () => ({
+      regionId: "jp-tokyo",
+      regionName: "Tokyo",
+      countryName: "Japan",
+      countryCode: "JP",
+      total: 82,
+      breakdown: { job: 78, cost: 80, visa: 74, language: 90 },
+      summaryLine: "영어 부담이 낮고 도시 인프라가 좋아 ‘확실한 첫 선택’에 가까워.",
+      reasons: {
+        job: [
+          "도시권이라 서비스/매장/단기 일자리 탐색이 비교적 수월한 편",
+          "선호 직군(서비스/매장)에 맞는 포지션이 많다고 가정",
+        ],
+        cost: [
+          "초기 예산 범위에서 ‘정착 리스크’가 상대적으로 낮은 축",
+          "물가가 높은 지역도 있지만 선택지(주거/식비) 조정 여지가 있음",
+        ],
+        visa: [
+          "워홀/체류 조건이 비교적 명확하다고 가정",
+          "지역 전략(대도시/지역)에 따라 체감 난이도 변동 가능",
+        ],
+        language: [
+          "영어 의존도가 낮아 ‘초보’에게 부담이 적은 편",
+          "현지어를 조금이라도 준비하면 적응 속도가 더 빨라짐",
+        ],
+      },
+      nextSteps: [
+        {
+          title: "2주 영어 루틴 만들기",
+          desc: "전화/면접 대비용 문장 30개 + 하루 10분 쉐도잉",
+          impact: "Language +3~5 (예상)",
+        },
+        {
+          title: "일자리 키워드 정리",
+          desc: "희망 직군 3개로 좁히고 검색 키워드/이력서 템플릿 준비",
+          impact: "Job +4~6 (예상)",
+        },
+        {
+          title: "예산 방어 전략",
+          desc: "첫 달 고정비(숙소/교통) 상한선을 정하고 리스트업",
+          impact: "Cost 리스크 ↓",
+        },
+      ],
+      tags: ["추천", "도시", "초보OK"],
+      createdAt: "2026-01-09",
+    }),
+    []
+  );
+
+  const [activeTab, setActiveTab] = useState<"details" | "answers">("details");
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    job: true,
+    cost: false,
+    visa: false,
+    language: false,
+  });
+
+  // ✅ UI-only 입력 요약(나중에 test answers로 교체)
+  const answers = useMemo(
     () => [
-      {
-        id: "goal",
-        title: "어떤 워홀/해외생활을 원해?",
-        placeholder: "원하는 걸 줄글로 편하게 적어줘 (선택지 체크만 해도 돼)",
-        why: "목표/우선순위는 추천 지역의 가중치(무엇을 더 중요하게 볼지)에 영향을 줘.",
-        affects: ["job", "cost", "visa", "language"],
-        example: "예) 돈이 중요하고, 영어도 늘고 싶어. 너무 외진 곳은 싫어.",
-        quickOptions: [
-          { id: "money", label: "돈을 많이 벌고 싶어" },
-          { id: "english", label: "영어 실력을 늘리고 싶어" },
-          { id: "city", label: "대도시 선호" },
-          { id: "safe", label: "안전/생활 편함이 중요" },
-          { id: "fun", label: "문화/여행/재미가 중요" },
-        ],
-      },
-      {
-        id: "english",
-        title: "영어는 어느 정도라고 느껴?",
-        placeholder: "예: 완전 초보 / 일상대화 가능 / 업무 가능 ...",
-        why: "영어는 ‘적응 난이도’와 ‘일자리 접근성’에 크게 반영돼.",
-        affects: ["language", "job"],
-        example: "예) 주문/길찾기 정도는 가능해. 전화는 어려워.",
-        quickOptions: [
-          { id: "beginner", label: "완전 초보" },
-          { id: "basic", label: "기본 회화 가능" },
-          { id: "daily", label: "일상대화 가능" },
-          { id: "work", label: "업무 대화 가능" },
-          { id: "score", label: "시험 점수 있음" },
-        ],
-      },
-      {
-        id: "budget",
-        title: "초기 정착 예산은 대략 얼마나 잡고 있어?",
-        placeholder: "예: 200~300만원 정도, 최대 400까지 가능",
-        why: "예산은 ‘비용 리스크(Cost)’ 점수에 반영돼.",
-        affects: ["cost"],
-        example: "예) 300만원 있고, 부모님 도움은 없음.",
-        quickOptions: [
-          { id: "b1", label: "100만원 이하" },
-          { id: "b2", label: "100~300만원" },
-          { id: "b3", label: "300~600만원" },
-          { id: "b4", label: "600만원 이상" },
-          { id: "unknown", label: "아직 모르겠어" },
-        ],
-      },
-      {
-        id: "city",
-        title: "도시 vs 소도시(지역) 중 어떤 쪽이 더 좋아?",
-        placeholder: "예: 대도시 선호 / 지역도 괜찮음 / 상관없음",
-        why: "도시/지역 성향은 비용/일자리 경쟁/체류 전략 판단에 참고돼.",
-        affects: ["job", "cost", "visa"],
-        example: "예) 너무 외진 곳만 아니면 지역도 괜찮아.",
-        quickOptions: [
-          { id: "metro", label: "대도시(메트로) 선호" },
-          { id: "regional", label: "소도시/지역도 OK" },
-          { id: "any", label: "상관없음" },
-          { id: "lowcost", label: "비용 낮은 곳 선호" },
-          { id: "infra", label: "인프라/편의가 중요" },
-        ],
-      },
-      {
-        id: "work",
-        title: "어떤 일을 하고 싶어? (경험 없어도 선호만)",
-        placeholder: "예: 카페/레스토랑, 오피스, IT, 아무거나...",
-        why: "선호 직군은 ‘일자리 적합도(Job)’ 판단에 참고돼.",
-        affects: ["job"],
-        example: "예) 서비스업 괜찮은데, 밤근무는 싫어.",
-        quickOptions: [
-          { id: "service", label: "서비스/매장" },
-          { id: "office", label: "오피스/사무" },
-          { id: "it", label: "IT/개발" },
-          { id: "any", label: "아무거나" },
-          { id: "day", label: "낮근무 선호" },
-        ],
-      },
+      { q: "목표/우선순위", a: "돈도 중요하고, 영어도 늘고 싶어. 대도시 선호" },
+      { q: "영어", a: "기본 회화 가능 (전화는 어려움)" },
+      { q: "예산", a: "200~300만원 정도" },
+      { q: "도시/지역", a: "대도시 선호" },
+      { q: "일 스타일", a: "서비스/매장 괜찮음" },
     ],
     []
   );
 
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<AnswerMap>({});
-  const [input, setInput] = useState("");
-
-  // ✅ 질문별 quick 선택 상태
-  const [selectedQuick, setSelectedQuick] = useState<Record<string, string[]>>({});
-
-  const q = questions[clamp(step, 0, questions.length - 1)];
-  const progress = Math.round(((step + 1) / questions.length) * 100);
-  const completed = Object.keys(answers).length >= questions.length;
-
-  const leftScrollRef = useRef<HTMLDivElement | null>(null);
-
-  function toggleQuick(qid: string, optId: string) {
-    setSelectedQuick((prev) => {
-      const curr = new Set(prev[qid] ?? []);
-      if (curr.has(optId)) curr.delete(optId);
-      else curr.add(optId);
-      return { ...prev, [qid]: Array.from(curr) };
-    });
-  }
-
-  const quickText = useMemo(() => {
-    const ids = selectedQuick[q.id] ?? [];
-    const map = new Map((q.quickOptions ?? []).map((o) => [o.id, o.label]));
-    return ids
-      .map((id) => map.get(id))
-      .filter(Boolean)
-      .join(", ");
-  }, [q, selectedQuick]);
-
-  function resetAll() {
-    setStep(0);
-    setAnswers({});
-    setInput("");
-    setSelectedQuick({});
-  }
-
-  function goToStep(i: number) {
-    setStep(clamp(i, 0, questions.length - 1));
-  }
-
-  function submitCurrent() {
-    if (!q) return;
-
-    const typed = input.trim();
-    const final = [quickText, typed].filter(Boolean).join(" / ").trim();
-
-    if (!final) return;
-
-    setAnswers((prev) => ({ ...prev, [q.id]: final }));
-    setInput("");
-
-    // 다음 질문으로 이동
-    setStep((s) => {
-      const next = s + 1;
-      return clamp(next, 0, questions.length - 1);
-    });
-
-    // 왼쪽 스크롤 맨 아래로(약간의 “대화 진행 느낌”)
-    requestAnimationFrame(() => {
-      if (!leftScrollRef.current) return;
-      leftScrollRef.current.scrollTop = leftScrollRef.current.scrollHeight;
-    });
-  }
-
-  const preview: PreviewItem[] = useMemo(() => {
-    const base: PreviewItem[] = [
-      {
-        regionId: "jp-tokyo",
-        regionName: "Tokyo",
-        countryName: "Japan",
-        countryCode: "JP",
-        score: 82,
-        reasonLine: "영어 부담 낮고, 도시 인프라로 적응 쉬움",
-        tags: ["추천", "도시"],
-      },
-      {
-        regionId: "au-sydney",
-        regionName: "Sydney",
-        countryName: "Australia",
-        countryCode: "AU",
-        score: 74,
-        reasonLine: "영어 환경 좋지만 비용 리스크 있음",
-        tags: ["영어환경"],
-      },
-      {
-        regionId: "au-melbourne",
-        regionName: "Melbourne",
-        countryName: "Australia",
-        countryCode: "AU",
-        score: 68,
-        reasonLine: "생활 만족도/문화 강점, 비용은 중간",
-        tags: ["도시"],
-      },
-      {
-        regionId: "jp-osaka",
-        regionName: "Osaka",
-        countryName: "Japan",
-        countryCode: "JP",
-        score: 61,
-        reasonLine: "안정적인 선택, 생활비 부담 비교적 낮음",
-        tags: ["도시"],
-      },
-    ];
-
-    const all = Object.values(answers).join(" ").toLowerCase();
-    let bump = 0;
-
-    if (all.includes("영어") || all.includes("english")) bump += 1;
-    if (all.includes("초보") || all.includes("완전")) bump -= 1;
-    if (all.includes("돈") || all.includes("벌")) bump += 1;
-    if (all.includes("대도시") || all.includes("도시")) bump += 1;
-    if (all.includes("지역") || all.includes("소도시")) bump += 1;
-
-    bump = clamp(bump, -2, 3);
-
-    const next = base.map((x) => ({ ...x, score: clamp(x.score + bump, 0, 100) }));
-    next.sort((a, b) => b.score - a.score);
-    return next.slice(0, 3);
-  }, [answers]);
-
-  const canSubmit = Boolean(input.trim() || quickText);
+  const breakdownEntries = Object.entries(result.breakdown) as Array<
+    [keyof ScoreBreakdown, number]
+  >;
 
   return (
     <main className="h-dvh w-full overflow-hidden px-4 pt-20 pb-10">
       <div className="mx-auto h-full max-w-5xl">
         {/* Header */}
-        <header className="mb-4 flex items-start justify-between">
+        <header className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-fg">Test</h1>
+            <h1 className="text-2xl font-semibold text-fg">Result</h1>
             <p className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
-              줄글로 입력하거나, 아래 1~5번을 체크해서 빠르게 답할 수 있어.
+              점수 산출 근거는 아래에서 섹션별로 확인할 수 있어.
             </p>
           </div>
 
@@ -278,331 +152,313 @@ export default function TestPage() {
             <button
               type="button"
               className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-xs hover:bg-[rgb(var(--muted))]"
-              onClick={resetAll}
+              onClick={() => alert("나중에: Test 페이지로 돌아가기")}
             >
-              Reset
+              Retake test
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-black px-3 py-2 text-xs text-white hover:opacity-90"
+              onClick={() => alert("나중에: 결과 저장(localStorage)")}
+            >
+              Save
             </button>
           </div>
         </header>
 
         {/* Body */}
-        <section className="grid h-[calc(100%-84px)] min-h-0 gap-4 md:grid-cols-[1.25fr_0.75fr]">
-          {/* LEFT */}
+        <section className="grid h-[calc(100%-84px)] min-h-0 gap-4 md:grid-cols-[1.15fr_0.85fr]">
+          {/* LEFT: Summary */}
           <article className={`${glass} min-h-0 overflow-hidden bg-[rgb(var(--card))] flex flex-col`}>
-            {/* Top Progress */}
+            {/* Top summary */}
             <div className="border-b border-[rgb(var(--border))] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-fg">
-                  Step {step + 1}/{questions.length}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-fg">
+                    {result.countryName} · {result.regionName}{" "}
+                    <span className="text-[rgb(var(--muted-foreground))]">
+                      ({result.countryCode})
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                    Created at {result.createdAt} • UI only
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(result.tags ?? []).map((t) => (
+                      <span
+                        key={t}
+                        className="rounded-full border border-[rgb(var(--border))] bg-bg px-2 py-0.5 text-[11px] text-[rgb(var(--muted-foreground))]"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-xs text-[rgb(var(--muted-foreground))]">
-                  {progress}%
+
+                <div className="shrink-0 text-right">
+                  <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                    Total score
+                  </div>
+                  <div className="mt-1 text-3xl font-semibold text-[rgb(var(--primary))]">
+                    {result.total}
+                  </div>
+                  <div className="mt-1 text-[11px] text-[rgb(var(--muted-foreground))]">
+                    /100
+                  </div>
                 </div>
               </div>
-              <div className="mt-3 h-2 w-full rounded-full bg-[rgb(var(--muted))]">
-                <div
-                  className="h-2 rounded-full bg-[rgb(var(--primary))]"
-                  style={{ width: `${progress}%` }}
-                />
+
+              <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-bg px-4 py-3">
+                <div className="text-sm font-semibold text-fg">Summary</div>
+                <div className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">
+                  {result.summaryLine}
+                </div>
               </div>
             </div>
 
-            {/* Content scroll */}
-            <div ref={leftScrollRef} className="min-h-0 flex-1 overflow-auto p-4 space-y-4">
-              {/* Previous answers (작게) */}
-              {questions.map((qq, idx) => {
-                const a = answers[qq.id];
-                if (!a) return null;
-                return (
-                  <div
-                    key={qq.id}
-                    className="rounded-2xl border border-[rgb(var(--border))] bg-bg px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-fg">
-                          Q{idx + 1}. {qq.title}
-                        </div>
-                        <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))] whitespace-pre-wrap">
-                          {a}
+            {/* Scroll area */}
+            <div className="min-h-0 flex-1 overflow-auto p-4 space-y-4">
+              {/* Breakdown */}
+              <section className="rounded-2xl border border-[rgb(var(--border))] bg-bg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-fg">Breakdown</div>
+                  <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                    (숫자는 최소만 표시)
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {breakdownEntries.map(([k, v]) => (
+                    <div key={k}>
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-medium text-fg">{keyLabel(k)}</div>
+                        <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                          {v}/100
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="shrink-0 text-xs text-[rgb(var(--muted-foreground))] hover:underline"
-                        onClick={() => goToStep(idx)}
-                      >
-                        Edit
-                      </button>
+                      <div className="mt-2 h-2 w-full rounded-full bg-[rgb(var(--muted))]">
+                        <div
+                          className="h-2 rounded-full bg-[rgb(var(--primary))]"
+                          style={{ width: pct(v) }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-
-              {/* Current question card */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-bg px-5 py-5">
-                <div className="text-base font-semibold text-fg">{q.title}</div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <div className="text-xs text-[rgb(var(--muted-foreground))]">영향:</div>
-                  {q.affects.map((k) => (
-                    <span
-                      key={k}
-                      className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))]"
-                    >
-                      {affectsLabel(k)}
-                    </span>
                   ))}
                 </div>
+              </section>
 
-                <div className="mt-3 text-sm text-[rgb(var(--muted-foreground))]">
-                  <span className="font-medium">왜?</span> {q.why}
+              {/* Next steps */}
+              <section className="rounded-2xl border border-[rgb(var(--border))] bg-bg p-4">
+                <div className="text-sm font-semibold text-fg">Next steps</div>
+                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                  점수를 올리는 “행동”만 간단히 정리했어.
                 </div>
 
-                {q.example && (
-                  <div className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">
-                    <span className="font-medium">예시:</span> {q.example}
-                  </div>
-                )}
-
-                {/* Quick options */}
-                {!!q.quickOptions?.length && (
-                  <div className="mt-5">
-                    <div className="text-xs text-[rgb(var(--muted-foreground))]">
-                      빠른 선택(선택사항) — 클릭하거나 <span className="font-medium">Alt+1~5</span>
-                    </div>
-
-                    <div className="mt-2 grid gap-2">
-                      {q.quickOptions.slice(0, 5).map((opt, idx) => {
-                        const active = (selectedQuick[q.id] ?? []).includes(opt.id);
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => toggleQuick(q.id, opt.id)}
-                            className={[
-                              "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                              active
-                                ? "border-[rgb(var(--primary))] bg-[rgb(var(--card))] ring-1 ring-[rgb(var(--primary))]"
-                                : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:bg-[rgb(var(--muted))]",
-                            ].join(" ")}
-                          >
-                            <span className="w-6 text-xs text-[rgb(var(--muted-foreground))]">
-                              {idx + 1}.
-                            </span>
-                            <span className="text-sm text-fg">{opt.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {quickText && (
-                      <div className="mt-2 text-xs text-[rgb(var(--muted-foreground))]">
-                        선택됨: <span className="text-fg">{quickText}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Text input */}
-                <div className="mt-5">
-                  <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={q.placeholder}
-                    rows={3}
-                    className="w-full resize-none rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-sm text-fg outline-none placeholder:text-[rgb(var(--muted-foreground))]"
-                    onKeyDown={(e) => {
-                      // Enter: submit (Shift+Enter newline)
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        submitCurrent();
-                        return;
-                      }
-
-                      // Alt + 1~5: quick toggle
-                      if (e.altKey) {
-                        const n = Number(e.key);
-                        if (!Number.isNaN(n) && n >= 1 && n <= 5) {
-                          e.preventDefault();
-                          const opt = q.quickOptions?.[n - 1];
-                          if (opt) toggleQuick(q.id, opt.id);
-                        }
-                      }
-                    }}
-                  />
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="text-[11px] text-[rgb(var(--muted-foreground))]">
-                      Enter 전송 • Shift+Enter 줄바꿈 • Alt+1~5 빠른선택
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={submitCurrent}
-                      disabled={!canSubmit}
-                      className={[
-                        "rounded-2xl px-4 py-2 text-sm transition",
-                        canSubmit
-                          ? "bg-black text-white hover:opacity-90"
-                          : "cursor-not-allowed bg-[rgb(var(--muted))] text-[rgb(var(--muted-foreground))]",
-                      ].join(" ")}
-                    >
-                      Next →
-                    </button>
-                  </div>
-
-                  <div className="mt-2 text-[11px] text-[rgb(var(--muted-foreground))]">
-                    * 점수 산출 근거(자세한 설명)는 결과 상세 페이지에서 보여줄게.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          {/* RIGHT */}
-          <aside className={`${glass} min-h-0 overflow-hidden bg-[rgb(var(--card))] flex flex-col`}>
-            <div className="border-b border-[rgb(var(--border))] p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-fg">Summary</div>
-                  <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-                    입력 요약 & 임시 프리뷰
-                  </div>
-                </div>
-                <div className="text-xs text-[rgb(var(--muted-foreground))]">
-                  {Object.keys(answers).length}/{questions.length}
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3">
-              {/* Answers list */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-bg p-3">
-                <div className="text-xs font-medium text-[rgb(var(--muted-foreground))]">
-                  Answers
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {questions.map((qq, idx) => {
-                    const a = answers[qq.id];
-                    const filled = Boolean(a);
-                    return (
-                      <button
-                        key={qq.id}
-                        type="button"
-                        onClick={() => goToStep(idx)}
-                        className={[
-                          "w-full rounded-xl border px-3 py-2 text-left transition",
-                          filled
-                            ? "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:bg-[rgb(var(--muted))]"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] opacity-70 hover:bg-[rgb(var(--muted))]",
-                        ].join(" ")}
-                      >
-                        <div className="text-xs font-medium text-fg">
-                          Q{idx + 1}. {qq.title}
-                        </div>
-                        <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))] line-clamp-2">
-                          {filled ? a : "— not answered"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Preview */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-bg p-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium text-[rgb(var(--muted-foreground))]">
-                    Preview (Top 3)
-                  </div>
-                  <div className="text-[10px] text-[rgb(var(--muted-foreground))]">UI only</div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {preview.map((x, i) => (
+                <div className="mt-4 space-y-3">
+                  {result.nextSteps.map((s, idx) => (
                     <div
-                      key={x.regionId}
-                      className={[
-                        "rounded-2xl border p-3",
-                        i === 0
-                          ? "border-[rgb(var(--primary))] bg-[rgb(var(--card))] ring-1 ring-[rgb(var(--primary))]"
-                          : "border-[rgb(var(--border))] bg-[rgb(var(--card))]",
-                      ].join(" ")}
+                      key={idx}
+                      className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-fg">
-                            {x.countryName} · {x.regionName}
-                          </div>
+                          <div className="text-sm font-semibold text-fg">{s.title}</div>
                           <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-                            {x.reasonLine}
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {(x.tags ?? []).map((t) => (
-                              <span
-                                key={t}
-                                className="rounded-full border border-[rgb(var(--border))] bg-bg px-2 py-0.5 text-[11px] text-[rgb(var(--muted-foreground))]"
-                              >
-                                {t}
-                              </span>
-                            ))}
+                            {s.desc}
                           </div>
                         </div>
-
-                        <div className="shrink-0 text-right">
-                          <div className="text-sm font-semibold text-[rgb(var(--primary))]">
-                            {x.score}
+                        {s.impact && (
+                          <div className="shrink-0 rounded-full border border-[rgb(var(--border))] bg-bg px-2 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
+                            {s.impact}
                           </div>
-                          <div className="mt-1 text-[10px] text-[rgb(var(--muted-foreground))]">
-                            /100
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-[10px] text-[rgb(var(--muted-foreground))]">
-                        자세한 산출 근거는 결과 상세에서 확인
+                        )}
                       </div>
                     </div>
                   ))}
+                </div>
 
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      className={[
-                        "flex-1 rounded-xl px-3 py-2 text-sm transition",
-                        completed
-                          ? "bg-black text-white hover:opacity-90"
-                          : "cursor-not-allowed bg-[rgb(var(--muted))] text-[rgb(var(--muted-foreground))]",
-                      ].join(" ")}
-                      disabled={!completed}
-                      onClick={() => alert("나중에: 결과 페이지로 라우팅 연결")}
-                    >
-                      View result
-                    </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-black px-4 py-2 text-sm text-white hover:opacity-90"
+                    onClick={() => alert("나중에: 지역 리스트/지도 페이지로 연결")}
+                  >
+                    Explore regions
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-2 text-sm hover:bg-[rgb(var(--muted))]"
+                    onClick={() => alert("나중에: 결과 상세(이 페이지의 디테일 섹션으로 스크롤)")}
+                  >
+                    See why
+                  </button>
+                </div>
+              </section>
 
-                    <button
-                      type="button"
-                      className={[
-                        "flex-1 rounded-xl border border-[rgb(var(--border))] bg-bg px-3 py-2 text-sm transition",
-                        completed ? "hover:bg-[rgb(var(--muted))]" : "opacity-70",
-                      ].join(" ")}
-                      onClick={() => alert("나중에: 결과 저장(local) 연결")}
-                    >
-                      Save
-                    </button>
+              {/* “Confidence” callout */}
+              <section className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4">
+                <div className="text-sm font-semibold text-fg">Confidence</div>
+                <div className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">
+                  이 결과는 “정답”이라기보다, 지금 네 조건에서 선택지를 좁혀주는 용도야.
+                  디테일을 보고 마음에 드는 옵션만 남겨서 비교해봐.
+                </div>
+              </section>
+            </div>
+          </article>
+
+          {/* RIGHT: Details / Answers */}
+          <aside className={`${glass} min-h-0 overflow-hidden bg-[rgb(var(--card))] flex flex-col`}>
+            {/* Tabs */}
+            <div className="border-b border-[rgb(var(--border))] p-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("details")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm transition",
+                    activeTab === "details"
+                      ? "bg-bg text-fg border border-[rgb(var(--border))]"
+                      : "text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--muted))]",
+                  ].join(" ")}
+                >
+                  Details (Why)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("answers")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm transition",
+                    activeTab === "answers"
+                      ? "bg-bg text-fg border border-[rgb(var(--border))]"
+                      : "text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--muted))]",
+                  ].join(" ")}
+                >
+                  Your answers
+                </button>
+
+                <div className="ml-auto text-xs text-[rgb(var(--muted-foreground))]">
+                  UI only
+                </div>
+              </div>
+            </div>
+
+            {/* Scroll area */}
+            <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3">
+              {activeTab === "details" ? (
+                <>
+                  {/* Sections (accordion-ish) */}
+                  {(
+                    [
+                      ["job", "Job score — 일자리/적합도"],
+                      ["cost", "Cost score — 비용/리스크"],
+                      ["visa", "Visa score — 비자/체류"],
+                      ["language", "Language score — 언어/적응"],
+                    ] as Array<[keyof ScoreBreakdown, string]>
+                  ).map(([k, title]) => {
+                    const isOpen = open[k];
+
+                    return (
+                      <div
+                        key={k}
+                        className="rounded-2xl border border-[rgb(var(--border))] bg-bg"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setOpen((prev) => ({ ...prev, [k]: !prev[k] }))}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-fg">{title}</div>
+                            <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                              {result.breakdown[k]}/100 • 핵심 근거 요약
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-xs text-[rgb(var(--muted-foreground))]">
+                            {isOpen ? "Hide" : "Show"}
+                          </div>
+                        </button>
+
+                        {isOpen && (
+                          <div className="border-t border-[rgb(var(--border))] px-4 py-3">
+                            <ul className="space-y-2">
+                              {result.reasons[k].map((line, idx) => (
+                                <li
+                                  key={idx}
+                                  className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--muted-foreground))]"
+                                >
+                                  {line}
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="mt-3 text-[11px] text-[rgb(var(--muted-foreground))]">
+                              * 숫자/가중치 등 자세한 계산식은 나중에 더 투명하게 확장 가능
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Small note */}
+                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                      여기서는 “문장 기반 근거”만 보여줘. 사용자는 납득하고, 너는 포폴에서
+                      “설명 가능한 스코어링(Explainable)”을 강조할 수 있어.
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Answers */}
+                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-bg p-3">
+                    <div className="text-sm font-semibold text-fg">Your answers</div>
+                    <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                      테스트에서 입력한 내용(placeholder)
+                    </div>
 
-              {/* Tiny helper */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                <div className="text-xs text-[rgb(var(--muted-foreground))]">
-                  UI만 먼저 만들었고, 질문/산출/프리뷰는 나중에 백엔드 붙일 때 갈아끼우면 돼.
-                </div>
-              </div>
+                    <div className="mt-3 space-y-2">
+                      {answers.map((x, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2"
+                        >
+                          <div className="text-xs font-medium text-fg">{x.q}</div>
+                          <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                            {x.a}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        className="flex-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm hover:bg-[rgb(var(--muted))]"
+                        onClick={() => alert("나중에: Test로 돌아가서 수정")}
+                      >
+                        Edit answers
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 rounded-xl bg-black px-3 py-2 text-sm text-white hover:opacity-90"
+                        onClick={() => alert("나중에: 결과 재계산/새 결과 생성")}
+                      >
+                        Recalculate
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Compare stub */}
+                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
+                    <div className="text-sm font-semibold text-fg">Compare</div>
+                    <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                      나중에: 상위 3개 지역을 한 화면에서 비교하는 카드 추가하면 포폴 맛이 확 나.
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </aside>
         </section>
